@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Hard Classroom Quiz</title>
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    text-align: center;
+    background: #0f172a;
+    color: white;
+    margin: 0;
+    padding: 20px;
+  }
+  .card {
+    background: #1e293b;
+    padding: 20px;
+    border-radius: 12px;
+    max-width: 520px;
+    margin: auto;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.4);
+  }
+  button {
+    padding: 10px;
+    margin: 6px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 15px;
+    width: 90%;
+  }
+  .answer { background: #334155; color: white; }
+  .answer:hover { background: #475569; }
+  #nextBtn, #startBtn { background: #22c55e; color: black; font-weight: bold; }
+  #timer { font-size: 18px; color: #fbbf24; }
+</style>
+</head>
+<body>
+
+<div class="card">
+  <h1>🔥 Hard Quiz Challenge</h1>
+  <p id="timer">Time: 10</p>
+  <p id="question">Press Start</p>
+  <div id="answers"></div>
+  <p id="score">Score: 0 | Streak: 0</p>
+  <button onclick="startGame()" id="startBtn">Start</button>
+  <button onclick="nextQuestion()" id="nextBtn" style="display:none;">Next</button>
+</div>
+
+<script>
+const questions = [
+  { q: "Solve: 3x + 5 = 20. What is x?", a: ["3", "5", "7", "10"], correct: 1 },
+  { q: "Square root of 144?", a: ["10", "11", "12", "13"], correct: 2 },
+  { q: "H2O is the chemical formula for?", a: ["Oxygen", "Hydrogen", "Water", "Salt"], correct: 2 },
+  { q: "What is 15% of 200?", a: ["10", "20", "30", "40"], correct: 2 },
+  { q: "Binary of 5?", a: ["101", "110", "111", "100"], correct: 0 },
+  { q: "What force keeps us on Earth?", a: ["Magnetism", "Gravity", "Friction", "Pressure"], correct: 1 },
+  { q: "If a triangle has angles 90° and 45°, third angle?", a: ["30°", "45°", "60°", "90°"], correct: 1 }
+];
+
+let current = 0;
+let score = 0;
+let streak = 0;
+let time = 10;
+let timer;
+
+function startGame() {
+  score = 0;
+  streak = 0;
+  current = 0;
+  document.getElementById("startBtn").style.display = "none";
+  document.getElementById("nextBtn").style.display = "inline-block";
+  showQuestion();
+}
+
+function startTimer() {
+  time = 10;
+  document.getElementById("timer").innerText = "Time: " + time;
+
+  clearInterval(timer);
+  timer = setInterval(() => {
+    time--;
+    document.getElementById("timer").innerText = "Time: " + time;
+
+    if (time <= 0) {
+      clearInterval(timer);
+      streak = 0;
+      nextQuestion();
+    }
+  }, 1000);
+}
+
+function showQuestion() {
+  let q = questions[current];
+  document.getElementById("question").innerText = q.q;
+
+  let answersDiv = document.getElementById("answers");
+  answersDiv.innerHTML = "";
+
+  q.a.forEach((ans, i) => {
+    let btn = document.createElement("button");
+    btn.innerText = ans;
+    btn.className = "answer";
+    btn.onclick = () => checkAnswer(i);
+    answersDiv.appendChild(btn);
+  });
+
+  document.getElementById("score").innerText =
+    `Score: ${score} | Streak: ${streak}`;
+
+  startTimer();
+}
+
+function checkAnswer(i) {
+  let q = questions[current];
+
+  if (i === q.correct) {
+    streak++;
+    score += 10 * streak; // streak multiplier
+  } else {
+    streak = 0;
+  }
+
+  document.getElementById("score").innerText =
+    `Score: ${score} | Streak: ${streak}`;
+
+  nextQuestion();
+}
+
+function nextQuestion() {
+  clearInterval(timer);
+  current++;
+
+  if (current >= questions.length) {
+    endGame();
+  } else {
+    showQuestion();
+  }
+}
+
+function endGame() {
+  document.getElementById("question").innerText =
+    "Game Over! Final Score: " + score;
+
+  document.getElementById("answers").innerHTML = "";
+  document.getElementById("timer").innerText = "";
+
+  let rating =
+    score > 200 ? "Genius 🧠" :
+    score > 120 ? "Smart 🔥" :
+    score > 60 ? "Good 👍" :
+    "Try again 💀";
+
+  document.getElementById("score").innerText =
+    "Final: " + score + " | " + rating;
+
+  document.getElementById("nextBtn").style.display = "none";
+  document.getElementById("startBtn").style.display = "inline-block";
+  document.getElementById("startBtn").innerText = "Play Again";
+}
+</script>
+
+</body>
+</html>
