@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Mini Doom</title>
+<style>
+  body {
+    margin: 0;
+    overflow: hidden;
+    background: black;
+    font-family: Arial, sans-serif;
+  }
+
+  canvas { display: block; }
+
+  #hud {
+    position: absolute;
+    bottom: 10px;
+    left: 10px;
+    color: white;
+    font-size: 22px;
+    text-shadow: 2px 2px 4px black;
+  }
+
+  #hud button {
+    margin-left: 12px;
+    padding: 6px 10px;
+    font-size: 16px;
+    cursor: pointer;
+    border: none;
+    border-radius: 6px;
+  }
+
+  #crosshair {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 20px;
+    height: 20px;
+    margin-left: -10px;
+    margin-top: -10px;
+    pointer-events: none;
+  }
+
+  #crosshair::before,
+  #crosshair::after {
+    content: '';
+    position: absolute;
+    background: white;
+  }
+
+  #crosshair::before {
+    width: 20px;
+    height: 2px;
+    top: 9px;
+    left: 0;
+  }
+
+  #crosshair::after {
+    width: 2px;
+    height: 20px;
+    left: 9px;
+    top: 0;
+  }
+
+  #menu {
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    color: white;
+    z-index: 5;
+  }
+
+  button {
+    padding: 12px 24px;
+    margin-top: 12px;
+    font-size: 20px;
+    cursor: pointer;
+    border: none;
+    border-radius: 8px;
+  }
+</style>
+</head>
+<body>
+<div id="menu">
+  <h1 id="title">MINI DOOM</h1>
+  <p>WASD = Move | Arrow Keys = Look Around | Spacebar = Shoot</p>
+  <button onclick="startGame()">Start</button>
+</div>
+
+<div id="hud">
+  Health: <span id="health">100</span> | Enemies: <span id="enemies">0</span>
+  <button onclick="respawnEnemies()">Respawn Enemies</button>
+</div>
+
+<div id="crosshair"></div>
+<canvas id="game"></canvas>
+
+<script>
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+// --- simple 16-bit brick texture ---
+const texCanvas = document.createElement('canvas');
+texCanvas.width = 64;
+texCanvas.height = 64;
+const tctx = texCanvas.getContext('2d');
+
+for (let y = 0; y < 64; y++) {
+  for (let x = 0; x < 64; x++) {
+    const brick = (Math.floor(y / 8) % 2) ^ (Math.floor(x / 16) % 2);
+    const mortar = y % 8 === 0 || x % 16 === 0;
+
+    if (mortar) {
+      tctx.fillStyle = '#300';
+    } else {
+      const shade = brick ? 190 : 120;
+      tctx.fillStyle = `rgb(${shade},20,20)`;
+    }
+
+    tctx.fillRect(x, y, 1, 1);
+  }
+}
+
+const map = [
+  [1,1,1,1,1,1,1,1,1,1],
+  [1,0,0,0,0,0,0,0,0,1],
+  [1,0,1,0,1,1,1,0,0,1],
+  [1,0,1,0,0,0,1,0,0,1],
+  [1,0,1,1,1,0,1,0,0,1],
+  [1,0,0,0,1,0,0,0,0,1],
+  [1,0,1,0,1,1,1,1,0,1],
+  [1,0,1,0,0,0,0,1,0,1],
+  [1,0,0,0,0,0,0,0,0,1],
+  [1,1,1,1,1,1,1,1,1,1]
+];
+
+const basePlayer = {
+  x: 2,
+  y: 2,
+  angle: 0,
+  health: 100
+};
+
+let player = {...basePlayer};
+
+const baseEnemyCount = 3;
+let wave = 1;
+
+let enemies = [];
+
+function randomEmptyTile() {
+  let x, y;
+  do {
+    x = Math.floor(Math.random() * 8) + 1;
+    y = Math.floor(Math.random() * 8) + 1;
+  } while (map[y][x] === 1);
+  return {x, y};
+}
+
+function spawnEnemies(count) {
+  enemies = [];
+  for (let i = 0; i < count; i++) {
+    const pos = randomEmptyTile();
+    enemies.push({x: pos.x, y: pos.y, alive: true});
+  }
+}
+
+function resetGame() {
+  player = {...basePlayer};
+  wave = 1;
+  spawnEnemies(baseEnemyCount);
+}
+
+const keys = {};
+let running = false;
+
+function startGame() {
+  document.getElementById('menu').style.display = 'none';
+  document.getElementById('title').textContent = 'MINI DOOM';
+  resetGame();
+  running = true;
+  gameLoop();
+}
+
+function respawnEnemies() {
+  enemies.forEach(e => e.alive = true);
+}
+
+window.addEventListener('keydown', e => {
+  keys[e.key.toLowerCase()] = true;
+
+  
+
+  if (e.code === 'ArrowLeft') player.angle -= 0.08;
+  if (e.code === 'ArrowRight') player.angle += 0.08;
+
+  if (e.code === 'Space') shoot();
+});
+
+
+
+window.addEventListener('keyup', e => {
+  keys[e.key.toLowerCase()] = false;
+});
+
+
+
+
+
+function movePlayer() {
+  const speed = 0.06;
+
+  if (keys['arrowleft']) player.angle -= 0.05;
+  if (keys['arrowright']) player.angle += 0.05;
+
+  let moveX = 0;
+  let moveY = 0;
+
+  if (keys['w']) {
+    moveX += Math.cos(player.angle) * speed;
+    moveY += Math.sin(player.angle) * speed;
+  }
+  if (keys['s']) {
+    moveX -= Math.cos(player.angle) * speed;
+    moveY -= Math.sin(player.angle) * speed;
+  }
+  if (keys['a']) {
+    moveX += Math.cos(player.angle - Math.PI/2) * speed;
+    moveY += Math.sin(player.angle - Math.PI/2) * speed;
+  }
+  if (keys['d']) {
+    moveX += Math.cos(player.angle + Math.PI/2) * speed;
+    moveY += Math.sin(player.angle + Math.PI/2) * speed;
+  }
+
+  const newX = player.x + moveX;
+  const newY = player.y + moveY;
+
+  if (map[Math.floor(player.y)][Math.floor(newX)] === 0) player.x = newX;
+  if (map[Math.floor(newY)][Math.floor(player.x)] === 0) player.y = newY;
+}
+
+function hasLineOfSight(x0, y0, x1, y1) {
+  let dx = x1 - x0;
+  let dy = y1 - y0;
+  let steps = Math.max(Math.abs(dx), Math.abs(dy)) * 20;
+
+  for (let i = 0; i < steps; i++) {
+    let t = i / steps;
+    let x = x0 + dx * t;
+    let y = y0 + dy * t;
+
+    if (map[Math.floor(y)] && map[Math.floor(y)][Math.floor(x)] === 1) return false;
+  }
+  return true;
+}
+
+function raycast() {
+  const fov = Math.PI / 3;
+  const rays = 200;
+
+    const sky = ctx.createLinearGradient(0,0,0,canvas.height/2);
+  sky.addColorStop(0,'#08111f');
+  sky.addColorStop(1,'#5b1f1f');
+  ctx.fillStyle = sky;
+  ctx.fillRect(0,0,canvas.width,canvas.height/2);
+
+  const floor = ctx.createLinearGradient(0,canvas.height/2,0,canvas.height);
+  floor.addColorStop(0,'#222');
+  floor.addColorStop(1,'#111');
+  ctx.fillStyle = floor;
+  ctx.fillRect(0,canvas.height/2,canvas.width,canvas.height/2);
+
+  for(let y = canvas.height/2; y < canvas.height; y += 6){
+    ctx.fillStyle = 'rgba(255,255,255,0.03)';
+    ctx.fillRect(0,y,canvas.width,2);
+  }
+
+  for (let i = 0; i < rays; i++) {
+    const rayAngle = player.angle - fov/2 + (i/rays)*fov;
+
+    let distance = 0;
+    let hit = false;
+    let hitX = 0;
+
+    while (!hit && distance < 20) {
+      distance += 0.02;
+      const testX = player.x + Math.cos(rayAngle)*distance;
+      const testY = player.y + Math.sin(rayAngle)*distance;
+
+      if (map[Math.floor(testY)] && map[Math.floor(testY)][Math.floor(testX)] === 1) {
+        hit = true;
+        hitX = testX;
+      }
+    }
+
+    const wallHeight = canvas.height / distance;
+    const texX = Math.floor((hitX % 1) * 64);
+
+    ctx.globalAlpha = Math.max(0.25, 1 - distance / 18);
+
+    ctx.drawImage(
+      texCanvas,
+      texX,
+      0,
+      1,
+      64,
+      i * (canvas.width / rays),
+      canvas.height / 2 - wallHeight / 2,
+      canvas.width / rays + 1,
+      wallHeight
+    );
+  }
+
+  ctx.globalAlpha = 1;
+}
+
+function drawEnemies() {
+  enemies.forEach(enemy => {
+    if (!enemy.alive) return;
+
+    if (!hasLineOfSight(player.x, player.y, enemy.x, enemy.y)) return;
+
+    const dx = enemy.x - player.x;
+    const dy = enemy.y - player.y;
+    const distance = Math.sqrt(dx*dx + dy*dy);
+
+    const angleToEnemy = Math.atan2(dy, dx) - player.angle;
+    const norm = Math.atan2(Math.sin(angleToEnemy), Math.cos(angleToEnemy));
+
+    if (Math.abs(norm) < Math.PI/6) {
+      const size = 300 / distance;
+      const screenX = canvas.width/2 + norm * canvas.width;
+
+            ctx.fillStyle = '#111';
+      ctx.fillRect(screenX - size/2, canvas.height/2 - size/2, size, size);
+
+      ctx.fillStyle = '#660000';
+      ctx.fillRect(screenX - size/4, canvas.height/2 - size/6, size/10, size/10);
+      ctx.fillRect(screenX + size/8, canvas.height/2 - size/6, size/10, size/10);
+
+      ctx.fillStyle = '#000';
+      ctx.fillRect(screenX - size/5, canvas.height/2 + size/6, size/2.5, size/10);
+
+      // dark outline
+      ctx.strokeStyle = '#333';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(screenX - size/2, canvas.height/2 - size/2, size, size);
+
+      if (distance < 1.2) player.health -= 0.1;
+    }
+  });
+}
+
+let gunFlash = 0;
+
+function drawGun() {
+  const bob = Math.sin(Date.now() * 0.008) * 6;
+  const gunWidth = 260;
+  const gunHeight = 180;
+  const x = canvas.width / 2 - gunWidth / 2;
+  const y = canvas.height - gunHeight + bob;
+
+    ctx.fillStyle = 'rgba(0,0,0,0.4)';
+  ctx.fillRect(x + 50, y + 35, 160, 120);
+
+  ctx.fillStyle = '#555';
+  ctx.fillRect(x + 60, y + 40, 140, 100);
+
+  ctx.fillStyle = '#777';
+  ctx.fillRect(x + 75, y + 25, 110, 25);
+
+  // barrel
+  ctx.fillStyle = '#777';
+  ctx.fillRect(x + 105, y, 50, 80);
+
+  // handle
+  ctx.fillStyle = '#333';
+  ctx.fillRect(x + 70, y + 110, 45, 55);
+
+  // highlights
+  ctx.fillStyle = '#999';
+  ctx.fillRect(x + 75, y + 50, 110, 12);
+
+  // muzzle flash
+  if (gunFlash > 0) {
+    ctx.fillStyle = 'orange';
+    ctx.beginPath();
+    ctx.moveTo(x + 130, y - 25);
+    ctx.lineTo(x + 100, y + 15);
+    ctx.lineTo(x + 160, y + 15);
+    ctx.fill();
+
+    gunFlash--;
+  }
+}
+
+function shoot() {
+  enemies.forEach(enemy => {
+    if (!enemy.alive) return;
+
+    const dx = enemy.x - player.x;
+    const dy = enemy.y - player.y;
+    const distance = Math.sqrt(dx*dx + dy*dy);
+
+    const angle = Math.atan2(dy, dx) - player.angle;
+    const norm = Math.atan2(Math.sin(angle), Math.cos(angle));
+
+    if (Math.abs(norm) < 0.15 && distance < 6) enemy.alive = false;
+
+    gunFlash = 4;
+  });
+}
+
+function updateHUD() {
+  document.getElementById('health').textContent = Math.max(0, Math.floor(player.health));
+  document.getElementById('enemies').textContent = enemies.filter(e => e.alive).length;
+}
+
+function checkGameState() {
+  if (player.health <= 0) {
+    running = false;
+    document.getElementById('menu').style.display = 'flex';
+    document.getElementById('title').textContent = 'YOU DIED';
+  }
+
+  if (enemies.every(e => !e.alive)) {
+    wave++;
+    spawnEnemies(baseEnemyCount + (wave - 1) * 2);
+  }
+}
+
+function gameLoop() {
+  if (!running) return;
+
+  movePlayer();
+  raycast();
+  drawEnemies();
+  drawGun();
+  updateHUD();
+  checkGameState();
+
+  requestAnimationFrame(gameLoop);
+}
+</script>
+</body>
+</html>
